@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mom's Orders App</title>
+<style>
+  body { margin:0; font-family:'Segoe UI', sans-serif; background-color:#121212; color:#ffffff; }
+  main { padding:10px; overflow-y:auto; height:100vh; box-sizing:border-box; }
+
+  .order-card {
+    background-color:#1E1E1E;
+    padding:12px;
+    margin-bottom:10px;
+    border-radius:10px;
+    word-wrap:break-word;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    transition: transform 0.2s, opacity 0.3s;
+  }
+  .order-card:hover { transform:scale(1.02); }
+  .delete-btn { background-color:#e53935; border:none; color:white; padding:5px 8px; border-radius:5px; cursor:pointer; }
+
+  /* --- Floating + Button --- */
+  #addBtn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    font-size:36px;
+    color:white;
+    background-color:#353434;
+    border:none;
+    cursor:pointer;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.4);
+    transition: transform 0.1s;
+  }
+  #addBtn:hover { transform: scale(1.1); }
+
+  /* --- Popup --- */
+  #popupOverlay {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center;
+  }
+  #popup {
+    background-color:#1E1E1E; padding:20px; border-radius:12px; width:90%; max-width:400px;
+  }
+  #popup input { width:100%; padding:10px; margin-bottom:12px; border-radius:6px; border:none; background-color:#2C2C2C; color:white; font-size:16px; }
+  #popup button { padding:10px 15px; border:none; border-radius:6px; font-size:16px; cursor:pointer; margin-right:10px; }
+  #popup #addOrderBtn { background-color:#43a047; color:white; }
+  #popup #cancelBtn { background-color:#e53935; color:white; }
+
+  /* --- Confetti Canvas --- */
+  #confettiCanvas { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+
+</style>
+</head>
+<body>
+
+<main id="ordersContainer"></main>
+
+<!-- Floating + Button -->
+<button id="addBtn">+</button>
+
+<!-- Popup for adding order -->
+<div id="popupOverlay">
+  <div id="popup">
+    <input type="text" id="foodInput" placeholder="Food Name ">
+    <input type="text" id="customerInput" placeholder="Customer Name ">
+    <input type="text" id="dateInput" placeholder="Due Date (MM-DD)">
+    <input type="number" id="amountInput" placeholder="Amount ($)">
+    <div style="text-align:right;">
+      <button id="addOrderBtn">Add</button>
+      <button id="cancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+
+<script>
+  let orderNumber = 1;
+  const ordersContainer = document.getElementById('ordersContainer');
+  const addBtn = document.getElementById('addBtn');
+  const popupOverlay = document.getElementById('popupOverlay');
+  const addOrderBtn = document.getElementById('addOrderBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+
+  addBtn.addEventListener('click', ()=>popupOverlay.style.display='flex');
+  cancelBtn.addEventListener('click', ()=>popupOverlay.style.display='none');
+
+  // Persistent storage
+  let ordersData = JSON.parse(localStorage.getItem('orders')) || [];
+  function saveOrders(){ localStorage.setItem('orders', JSON.stringify(ordersData)); }
+
+  function autoAddYear(dateStr){
+    if(dateStr.split('-').length === 2) return dateStr+'-'+new Date().getFullYear();
+    return dateStr;
+  }
+
+  function formatDate(dateStr){
+    try{
+      let [month, day, year] = dateStr.split('-');
+      let d = new Date(year, month-1, day);
+      const options = { weekday:'long', year:'numeric', month:'long', day:'numeric'};
+      return d.toLocaleDateString(undefined, options);
+    } catch(e){ return dateStr; }
+  }
+
+  function createOrderCard(order){
+    const card = document.createElement('div');
+    card.className='order-card';
+    card.textContent=`#${order.id}: ${order.food} for ${order.customer} | Due ${order.date} | $${order.amount}`;
+
+    const delBtn = document.createElement('button');
+    delBtn.className='delete-btn';
+    delBtn.textContent='🗑️';
+    delBtn.addEventListener('click', ()=>{
+      ordersContainer.removeChild(card);
+      ordersData = ordersData.filter(o=>o.id!==order.id);
+      saveOrders();
+    });
+    card.appendChild(delBtn);
+    ordersContainer.prepend(card);
+  }
+
+  function fireConfetti(){
+    const canvas = document.getElementById('confettiCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let confettiPieces = [];
+    for(let i=0;i<50;i++){
+      confettiPieces.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*-canvas.height,
+        r: Math.random()*4+2,
+        d: Math.random()*10+5,
+        color:`hsl(${Math.random()*360},70%,60%)`
+      });
+    }
+    function animate(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      confettiPieces.forEach((p,i)=>{
+        ctx.fillStyle=p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fill();
+        p.y+=p.d;
+        if(p.y>canvas.height) confettiPieces.splice(i,1);
+      });
+      if(confettiPieces.length>0) requestAnimationFrame(animate);
+    }
+    animate();
+  }
+
+  function addOrder(food, customer, dateRaw, amount){
+    const date = formatDate(autoAddYear(dateRaw));
+    const order = {id:orderNumber++, food, customer, date, amount};
+    ordersData.push(order);
+    saveOrders();
+    createOrderCard(order);
+    fireConfetti();
+  }
+
+  addOrderBtn.addEventListener('click', ()=>{
+    const food = document.getElementById('foodInput').value.trim();
+    const customer = document.getElementById('customerInput').value.trim();
+    const dateRaw = document.getElementById('dateInput').value.trim();
+    const amount = document.getElementById('amountInput').value.trim();
+    if(!food||!customer||!dateRaw||!amount) return;
+    addOrder(food, customer, dateRaw, amount);
+    popupOverlay.style.display='none';
+    document.getElementById('foodInput').value='';
+    document.getElementById('customerInput').value='';
+    document.getElementById('dateInput').value='';
+    document.getElementById('amountInput').value='';
+  });
+
+  // Load saved orders
+  if(ordersData.length>0){
+    ordersData.forEach(o=>{ createOrderCard(o); if(o.id>=orderNumber) orderNumber=o.id+1; });
+  }
+
+  window.addEventListener('resize', ()=>{
+    const canvas=document.getElementById('confettiCanvas');
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+  });
+</script>
+
+</body>
+</html>

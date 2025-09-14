@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mom-orders</string>
+    <string name="title_activity_main">Mom-orders</string>
+    <string name="package_name">com.microman100.momorders</string>
+    <string name="custom_url_scheme">com.microman100.momorders</string>
+</resources>
